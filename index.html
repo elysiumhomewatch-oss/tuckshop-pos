@@ -4,40 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tuckshop POS Pro</title>
-    <!-- Quagga2 for high-performance mobile 1D scanning -->
-    <script src="https://cdn.jsdelivr.net"></script>
+    <link rel="icon" href="data:,">
+    <!-- Reliable Quagga2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
     <style>
         :root { --primary: #2563eb; --success: #16a34a; --danger: #dc2626; --bg: #f8fafc; }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; padding: 10px; overscroll-behavior: none; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; padding: 10px; }
         .container { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        
-        /* Mobile Tabs */
         nav { display: flex; gap: 8px; margin-bottom: 15px; }
-        nav button { flex: 1; padding: 12px; border: none; background: #e2e8f0; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        nav button { flex: 1; padding: 12px; border: none; background: #e2e8f0; border-radius: 8px; font-weight: 600; cursor: pointer; }
         nav button.active { background: var(--primary); color: white; }
-
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-
-        /* Scanner Viewport */
         #interactive.viewport { width: 100%; height: 250px; position: relative; overflow: hidden; border-radius: 8px; background: #000; margin-bottom: 10px; display: none; }
         #interactive.viewport > video, #interactive.viewport > canvas { width: 100%; height: 100%; object-fit: cover; }
-        .drawingBuffer { position: absolute; top: 0; left: 0; }
-
-        /* Search & Inputs */
-        .search-box { margin-bottom: 15px; position: relative; }
         input, select { width: 100%; padding: 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; margin-bottom: 10px; box-sizing: border-box; }
-        
         .btn { width: 100%; padding: 14px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; margin-bottom: 10px; font-size: 16px; }
         .btn-scan { background: var(--primary); color: white; }
         .btn-save { background: var(--success); color: white; }
-        
-        /* Cart Styles */
         .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
-        .total-row { display: flex; justify-content: space-between; font-size: 20px; font-weight: 800; padding: 20px 0; }
-        
-        /* Manual Search Results */
-        #search-results { position: absolute; background: white; width: 100%; border: 1px solid #ddd; z-index: 10; max-height: 200px; overflow-y: auto; display: none; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #search-results { background: white; border: 1px solid #ddd; max-height: 200px; overflow-y: auto; display: none; border-radius: 8px; }
         .search-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
     </style>
 </head>
@@ -50,33 +36,23 @@
         <button id="nav-sets" onclick="showTab('sets')">⚙️</button>
     </nav>
 
-    <!-- Scanner View -->
     <div id="interactive" class="viewport"></div>
 
-    <!-- SALE TAB -->
     <div id="sale-tab" class="tab-content active">
         <button class="btn btn-scan" id="scan-btn" onclick="startScanner('sale')">📷 Start Scanning</button>
-        
-        <div class="search-box">
-            <input type="text" id="manual-search" placeholder="🔍 Type item name or barcode..." oninput="handleSearch(this.value)">
-            <div id="search-results"></div>
+        <input type="text" id="manual-search" placeholder="🔍 Search item..." oninput="handleSearch(this.value)">
+        <div id="search-results"></div>
+        <div id="cart-items"></div>
+        <div style="display:flex; justify-content:space-between; font-weight:800; padding:20px 0;">
+            <span>Total</span><span id="grand-total">R0.00</span>
         </div>
-
-        <div id="cart">
-            <div id="cart-items"></div>
-            <div class="total-row">
-                <span>Total</span>
-                <span id="grand-total">R0.00</span>
-            </div>
-            <button class="btn btn-save" onclick="checkout()">Checkout</button>
-        </div>
+        <button class="btn btn-save" onclick="checkout()">Checkout</button>
     </div>
 
-    <!-- STOCK TAB -->
     <div id="stock-tab" class="tab-content">
         <button class="btn btn-scan" onclick="startScanner('stock')">📷 Scan New Stock</button>
         <input type="text" id="stock-name" placeholder="Item Name">
-        <input type="number" id="stock-cost" placeholder="Cost Price (Wholesale)">
+        <input type="number" id="stock-cost" placeholder="Cost Price">
         <input type="text" id="stock-barcode" placeholder="Barcode ID">
         <select id="stock-cat">
             <option value="Snacks">Snacks</option>
@@ -86,26 +62,16 @@
         <button class="btn btn-save" onclick="saveStock()">Save to Cloud</button>
     </div>
 
-    <!-- SETTINGS TAB -->
     <div id="sets-tab" class="tab-content">
-        <h3>Settings</h3>
         <input type="text" id="sheet-url" placeholder="Google Script URL">
-        <div class="markup-row"><label>Snacks Markup %</label><input type="number" id="markup-Snacks" value="20"></div>
-        <div class="markup-row"><label>Drinks Markup %</label><input type="number" id="markup-Drinks" value="15"></div>
         <button class="btn" style="background:#333; color:white" onclick="saveSettings()">Save Config</button>
     </div>
 </div>
 
 <script>
-    let inventory = [];
-    let cart = [];
-    let isScannerRunning = false;
+    let inventory = [], cart = [], isScannerRunning = false;
 
-    // --- Core Initialization ---
-    window.onload = () => {
-        loadSettings();
-        fetchInventory();
-    };
+    window.onload = () => { loadSettings(); fetchInventory(); };
 
     function showTab(tab) {
         if (isScannerRunning) stopScanner();
@@ -115,118 +81,85 @@
         document.getElementById('nav-' + tab).classList.add('active');
     }
 
-    // --- Quagga2 Scanner Logic ---
-    function startScanner(mode) {
-        const viewport = document.getElementById('interactive');
-        viewport.style.display = 'block';
-        isScannerRunning = true;
+    async function startScanner(mode) {
+        // Fix for "Quagga is not defined"
+        if (typeof Quagga === 'undefined') {
+            alert("Scanner library is still loading. Please wait 2 seconds.");
+            return;
+        }
 
-        Quagga.init({
-            inputStream: { name: "Live", type: "LiveStream", target: viewport, constraints: { facingMode: "environment" } },
-            decoder: { readers: ["ean_reader", "code_128_reader", "upc_reader", "code_39_reader"] }
-        }, (err) => {
-            if (err) { alert("Camera Error: " + err); return; }
-            Quagga.start();
-        });
-
-        Quagga.onDetected((data) => {
-            const code = data.codeResult.code;
-            if (mode === 'sale') addToCart(code);
-            else document.getElementById('stock-barcode').value = code;
+        try {
+            // Explicitly request camera permission
+            await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
             
-            if (navigator.vibrate) navigator.vibrate(100);
-            stopScanner();
-        });
+            const viewport = document.getElementById('interactive');
+            viewport.style.display = 'block';
+            isScannerRunning = true;
+
+            Quagga.init({
+                inputStream: { name: "Live", type: "LiveStream", target: viewport, constraints: { facingMode: "environment" } },
+                decoder: { readers: ["ean_reader", "code_128_reader", "upc_reader"] }
+            }, (err) => {
+                if (err) { alert("Scanner failed: " + err); return; }
+                Quagga.start();
+            });
+
+            Quagga.onDetected((data) => {
+                const code = data.codeResult.code;
+                if (mode === 'sale') addToCart(code);
+                else document.getElementById('stock-barcode').value = code;
+                stopScanner();
+            });
+        } catch (e) {
+            alert("Camera blocked: Please enable camera in your browser settings.");
+        }
     }
 
-    function stopScanner() {
-        Quagga.stop();
-        document.getElementById('interactive').style.display = 'none';
-        isScannerRunning = false;
+    function stopScanner() { 
+        if (typeof Quagga !== 'undefined') Quagga.stop(); 
+        document.getElementById('interactive').style.display = 'none'; 
+        isScannerRunning = false; 
     }
 
-    // --- Search & Cart ---
     function handleSearch(val) {
         const resDiv = document.getElementById('search-results');
         if (val.length < 2) { resDiv.style.display = 'none'; return; }
-        
         const filtered = inventory.filter(i => i.name.toLowerCase().includes(val.toLowerCase()) || i.barcode.includes(val));
-        resDiv.innerHTML = filtered.map(i => `<div class="search-item" onclick="addToCart('${i.barcode}')">${i.name} (R${calculatePrice(i)})</div>`).join('');
+        resDiv.innerHTML = filtered.map(i => `<div class="search-item" onclick="addToCart('${i.barcode}')">${i.name}</div>`).join('');
         resDiv.style.display = filtered.length ? 'block' : 'none';
-    }
-
-    function calculatePrice(item) {
-        const markup = parseFloat(localStorage.getItem('markup-' + item.category) || 20) / 100;
-        return (item.cost * (1 + markup)).toFixed(2);
     }
 
     function addToCart(barcode) {
         const item = inventory.find(i => i.barcode == barcode);
-        if (!item) { alert("Item not found!"); return; }
-        
+        if (!item) return alert("Item not in stock!");
+        const markup = parseFloat(localStorage.getItem('markup-' + item.category) || 20) / 100;
+        const price = (item.cost * (1 + markup)).toFixed(2);
         const existing = cart.find(c => c.barcode == barcode);
         if (existing) existing.qty++;
-        else cart.push({ ...item, qty: 1, price: calculatePrice(item) });
-        
-        document.getElementById('search-results').style.display = 'none';
-        document.getElementById('manual-search').value = '';
+        else cart.push({ ...item, qty: 1, price: price });
         renderCart();
     }
 
     function renderCart() {
-        const container = document.getElementById('cart-items');
-        container.innerHTML = cart.map(item => `
-            <div class="cart-item">
-                <div><b>${item.name}</b><br><small>x${item.qty}</small></div>
-                <div>R${(item.price * item.qty).toFixed(2)}</div>
-            </div>
-        `).join('');
-        
-        const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-        document.getElementById('grand-total').innerText = 'R' + total.toFixed(2);
+        document.getElementById('cart-items').innerHTML = cart.map(i => `<div class="cart-item"><span>${i.name} x${i.qty}</span><span>R${(i.price * i.qty).toFixed(2)}</span></div>`).join('');
+        document.getElementById('grand-total').innerText = 'R' + cart.reduce((s, i) => s + (i.price * i.qty), 0).toFixed(2);
     }
 
-    // --- Data Persistence ---
     async function fetchInventory() {
         const url = localStorage.getItem('sheet-url');
-        if (!url) return;
-        try {
-            const res = await fetch(url);
-            inventory = await res.json();
-        } catch (e) { console.error("Cloud Fetch Failed", e); }
+        if (url) try { inventory = await (await fetch(url)).json(); } catch(e){}
     }
 
     async function saveStock() {
         const url = localStorage.getItem('sheet-url');
-        const data = {
-            name: document.getElementById('stock-name').value,
-            cost: document.getElementById('stock-cost').value,
-            barcode: document.getElementById('stock-barcode').value,
-            category: document.getElementById('stock-cat').value
-        };
+        const data = { name: document.getElementById('stock-name').value, cost: document.getElementById('stock-cost').value, barcode: document.getElementById('stock-barcode').value, category: document.getElementById('stock-cat').value };
         await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
-        alert("Stock Saved!");
-        fetchInventory();
+        alert("Stock Saved!"); fetchInventory();
     }
 
-    function saveSettings() {
-        localStorage.setItem('sheet-url', document.getElementById('sheet-url').value);
-        localStorage.setItem('markup-Snacks', document.getElementById('markup-Snacks').value);
-        localStorage.setItem('markup-Drinks', document.getElementById('markup-Drinks').value);
-        alert("Settings Saved locally!");
-    }
-
-    function loadSettings() {
-        document.getElementById('sheet-url').value = localStorage.getItem('sheet-url') || '';
-        document.getElementById('markup-Snacks').value = localStorage.getItem('markup-Snacks') || 20;
-        document.getElementById('markup-Drinks').value = localStorage.getItem('markup-Drinks') || 15;
-    }
-
-    function checkout() {
-        alert("Total: " + document.getElementById('grand-total').innerText);
-        cart = [];
-        renderCart();
-    }
+    function saveSettings() { localStorage.setItem('sheet-url', document.getElementById('sheet-url').value); alert("Saved!"); }
+    function loadSettings() { document.getElementById('sheet-url').value = localStorage.getItem('sheet-url') || ''; }
+    function checkout() { alert("Complete!"); cart = []; renderCart(); }
 </script>
 </body>
 </html>
