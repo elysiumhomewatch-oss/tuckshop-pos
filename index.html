@@ -1,0 +1,158 @@
+<!-- Replace your index.html content with this -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Markup POS</title>
+    <script src="https://unpkg.com"></script>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        nav { display: flex; gap: 5px; margin-bottom: 20px; }
+        nav button { flex: 1; padding: 12px; cursor: pointer; border: none; background: #007bff; color: white; border-radius: 4px; }
+        .tab-content { display: none; }
+        .active { display: block; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        #reader { width: 100%; max-width: 400px; margin: auto; border: 2px solid #007bff; }
+        .markup-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <nav>
+        <button onclick="showTab('cashpoint')">Cashpoint</button>
+        <button onclick="showTab('stock')">Stock In</button>
+        <button onclick="showTab('settings')">Settings</button>
+    </nav>
+
+    <!-- Cashpoint -->
+    <div id="cashpoint" class="tab-content active">
+        <h2>Cashpoint</h2>
+        <div id="reader"></div>
+        <div id="cart">
+            <h3>Cart</h3>
+            <ul id="cart-list"></ul>
+            <p><strong>Total: R<span id="total-price">0.00</span></strong></p>
+            <button onclick="checkout()" style="width:100%; background:green; color:white; padding:15px; border:none;">Complete Sale</button>
+        </div>
+    </div>
+
+    <!-- Stock -->
+    <div id="stock" class="tab-content">
+        <h2>Add Stock (Wholesale)</h2>
+        <input type="text" id="itemName" placeholder="Item Name">
+        <input type="number" id="itemCost" placeholder="Cost Price (Wholesale)">
+        <input type="text" id="itemBarcode" placeholder="Scan/Type Barcode">
+        <select id="itemCategory">
+            <option value="Snacks">Snacks</option>
+            <option value="Drinks">Drinks</option>
+            <option value="Other">Other</option>
+        </select>
+        <button onclick="syncToSheet()" style="background:#28a745; color:white; padding:10px; width:100%; border:none;">Add to Sheet</button>
+    </div>
+
+    <!-- Settings -->
+    <div id="settings" class="tab-content">
+        <h2>Pricing Settings</h2>
+        <input type="text" id="scriptUrl" placeholder="Google Script URL">
+        
+        <h3>Category Markups (%)</h3>
+        <div class="markup-row">
+            <label>Snacks:</label>
+            <input type="number" id="markup_Snacks" value="20">
+        </div>
+        <div class="markup-row">
+            <label>Drinks:</label>
+            <input type="number" id="markup_Drinks" value="15">
+        </div>
+        <div class="markup-row">
+            <label>Other:</label>
+            <input type="number" id="markup_Other" value="10">
+        </div>
+        <button onclick="saveSettings()" style="background:#333; color:white; padding:10px; width:100%; border:none;">Save Settings</button>
+    </div>
+</div>
+
+<script>
+    let inventory = [];
+    let cart = [];
+    let scanner = null;
+
+    // Load saved settings
+    document.getElementById('scriptUrl').value = localStorage.getItem('google_script_url') || '';
+    ['Snacks', 'Drinks', 'Other'].forEach(cat => {
+        const saved = localStorage.getItem('markup_' + cat);
+        if (saved) document.getElementById('markup_' + cat).value = saved;
+    });
+
+    function showTab(id) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if (id === 'cashpoint') startScanner();
+        else if (scanner) scanner.stop();
+    }
+
+    function saveSettings() {
+        localStorage.setItem('google_script_url', document.getElementById('scriptUrl').value);
+        ['Snacks', 'Drinks', 'Other'].forEach(cat => {
+            localStorage.setItem('markup_' + cat, document.getElementById('markup_' + cat).value);
+        });
+        alert("Settings Saved!");
+        loadFromSheet();
+    }
+
+    async function loadFromSheet() {
+        const url = localStorage.getItem('google_script_url');
+        if (!url) return;
+        try {
+            const response = await fetch(url);
+            inventory = await response.json();
+        } catch (e) { console.error(e); }
+    }
+
+    async function syncToSheet() {
+        const url = localStorage.getItem('google_script_url');
+        const item = {
+            name: document.getElementById('itemName').value,
+            cost: document.getElementById('itemCost').value,
+            barcode: document.getElementById('itemBarcode').value,
+            category: document.getElementById('itemCategory').value
+        };
+        await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(item) });
+        alert("Saved!");
+        loadFromSheet();
+    }
+
+    function startScanner() {
+        if (!scanner) scanner = new Html5Qrcode("reader");
+        scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (barcode) => {
+            const item = inventory.find(i => i.barcode == barcode);
+            if (item) {
+                // Calculate selling price: Cost + (Cost * Markup%)
+                const markup = parseFloat(localStorage.getItem('markup_' + item.category) || 0) / 100;
+                const sellingPrice = parseFloat(item.cost) * (1 + markup);
+                
+                cart.push({ ...item, sellingPrice });
+                updateCartUI();
+            }
+        });
+    }
+
+    function updateCartUI() {
+        const list = document.getElementById('cart-list');
+        list.innerHTML = cart.map(i => `<li>${i.name} - R${i.sellingPrice.toFixed(2)}</li>`).join('');
+        const total = cart.reduce((sum, i) => sum + i.sellingPrice, 0);
+        document.getElementById('total-price').innerText = total.toFixed(2);
+    }
+
+    function checkout() {
+        alert("Total: R" + document.getElementById('total-price').innerText);
+        cart = []; updateCartUI();
+    }
+
+    loadFromSheet();
+</script>
+</body>
+</html>
