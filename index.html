@@ -29,15 +29,25 @@
 
     <!-- Cashpoint -->
     <div id="cashpoint" class="tab-content active">
-        <h2>Cashpoint</h2>
-        <div id="reader"></div>
-        <div id="cart">
-            <h3>Cart</h3>
-            <ul id="cart-list"></ul>
-            <p><strong>Total: R<span id="total-price">0.00</span></strong></p>
-            <button onclick="checkout()" style="width:100%; background:green; color:white; padding:15px; border:none;">Complete Sale</button>
-        </div>
+    <h2>Cashpoint</h2>
+    <div id="reader"></div>
+    <div style="margin-top:10px; display:flex; gap:5px;">
+        <input type="text" id="manualBarcode" placeholder="Enter Barcode manually">
+        <button onclick="addToCart(document.getElementById('manualBarcode').value)" style="padding:10px; background:#007bff; color:white; border:none; border-radius:4px;">Add</button>
     </div>
+    
+    <div id="cart">
+        <h3>Current Sale</h3>
+        <table id="cart-table">
+            <thead>
+                <tr><th>Item</th><th>Qty</th><th>Price (Each)</th><th>Subtotal</th><th>Action</th></tr>
+            </thead>
+            <tbody id="cart-items"></tbody>
+        </table>
+        <h3 style="text-align:right;">Total: R<span id="total-price">0.00</span></h3>
+        <button onclick="checkout()" style="width:100%; background:green; color:white; padding:15px; border:none; border-radius:5px; font-size:1.2rem; cursor:pointer;">Finish Sale & Print</button>
+    </div>
+</div>
 
     <!-- Stock -->
     <div id="stock" class="tab-content">
@@ -76,8 +86,10 @@
 </div>
 
 <script>
+    
+
     let inventory = [];
-    let cart = [];
+    let cart = JSON.parse(localStorage.getItem('tuckshop_cart')) || []; // Persistent cart
     let scanner = null;
 
     // Load saved settings
@@ -125,34 +137,93 @@
         loadFromSheet();
     }
 
-    function startScanner() {
-        if (!scanner) scanner = new Html5Qrcode("reader");
-        scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (barcode) => {
-            const item = inventory.find(i => i.barcode == barcode);
-            if (item) {
-                // Calculate selling price: Cost + (Cost * Markup%)
-                const markup = parseFloat(localStorage.getItem('markup_' + item.category) || 0) / 100;
-                const sellingPrice = parseFloat(item.cost) * (1 + markup);
-                
-                cart.push({ ...item, sellingPrice });
-                updateCartUI();
-            }
-        });
+   function addToCart(barcode) {
+        const item = inventory.find(i => i.barcode == barcode);
+        if (!item) {
+            alert("Item not found in stock!");
+            return;
+        }
+
+        // Get markup for this category
+        const markupPercent = parseFloat(localStorage.getItem('markup_' + item.category) || 0);
+        const sellingPrice = parseFloat(item.cost) * (1 + (markupPercent / 100));
+
+        // Check if already in cart
+        const existingItem = cart.find(c => c.barcode === barcode);
+        if (existingItem) {
+            existingItem.qty += 1;
+        } else {
+            cart.push({
+                name: item.name,
+                barcode: item.barcode,
+                price: sellingPrice,
+                qty: 1
+            });
+        }
+
+        saveCart();
+        updateCartUI();
+        document.getElementById('manualBarcode').value = ''; // Clear manual input
+    }
+
+    function removeFromCart(index) {
+        cart.splice(index, 1);
+        saveCart();
+        updateCartUI();
+    }
+
+    function saveCart() {
+        localStorage.setItem('tuckshop_cart', JSON.stringify(cart));
     }
 
     function updateCartUI() {
-        const list = document.getElementById('cart-list');
-        list.innerHTML = cart.map(i => `<li>${i.name} - R${i.sellingPrice.toFixed(2)}</li>`).join('');
-        const total = cart.reduce((sum, i) => sum + i.sellingPrice, 0);
+        const tbody = document.getElementById('cart-items');
+        tbody.innerHTML = cart.map((item, index) => `
+            <tr>
+                <td>${item.name}</td>
+                <td>${item.qty}</td>
+                <td>R${item.price.toFixed(2)}</td>
+                <td>R${(item.price * item.qty).toFixed(2)}</td>
+                <td><button onclick="removeFromCart(${index})" style="background:red; color:white; border:none; border-radius:3px;">X</button></td>
+            </tr>
+        `).join('');
+
+        const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
         document.getElementById('total-price').innerText = total.toFixed(2);
     }
 
     function checkout() {
-        alert("Total: R" + document.getElementById('total-price').innerText);
-        cart = []; updateCartUI();
+        if (cart.length === 0) return alert("Cart is empty!");
+        
+        const total = document.getElementById('total-price').innerText;
+        alert("Sale Processed! Total: R" + total);
+        
+        // Optional: Send "Sale" data to a different Google Sheet tab here
+        
+        cart = [];
+        saveCart();
+        updateCartUI();
     }
 
-    loadFromSheet();
+    // --- Scanner Logic ---
+    function startScanner() {
+        if (!scanner) {
+            scanner = new Html5Qrcode("reader");
+        }
+        // Start scanner if not already running
+        scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
+            (decodedText) => {
+                // Throttle: Don't add same barcode 10 times a second
+                addToCart(decodedText);
+                scanner.pause(); // Pause for 1 second to avoid double-scans
+                setTimeout(() => scanner.resume(), 1500);
+            }
+        ).catch(err => console.error("Scanner failed", err));
+    }
+
+    // Initialize UI
+    updateCartUI();
+    loadFromSheet(); // From previous implementation
 </script>
 </body>
 </html>
