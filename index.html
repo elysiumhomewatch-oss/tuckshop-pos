@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tuckshop POS Pro</title>
     <link rel="icon" href="data:,">
-    <!-- Use maintained Quagga2 fork – latest as of 2026 works better than original Quagga -->
+    <!-- Maintained Quagga2 fork – reliable in 2025/2026 browsers -->
     <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
     <style>
         :root {
@@ -211,6 +211,8 @@
     let cart = [];
     let isScannerRunning = false;
     let currentScanMode = null;
+    let lastDetectionTime = 0;
+    const DETECTION_COOLDOWN_MS = 1800; // safety fallback (though we auto-stop)
 
     const elements = {
         manualSearch: document.getElementById('manual-search'),
@@ -244,6 +246,8 @@
             return;
         }
         currentScanMode = mode;
+        lastDetectionTime = 0; // Reset cooldown on new scan session
+
         try {
             await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
             const viewport = document.getElementById('interactive');
@@ -276,16 +280,28 @@
             });
 
             Quagga.onDetected(data => {
+                const now = Date.now();
+                if (now - lastDetectionTime < DETECTION_COOLDOWN_MS) {
+                    return; // safety fallback
+                }
+                lastDetectionTime = now;
+
                 const code = data.codeResult.code;
+
                 if (navigator.vibrate) navigator.vibrate(80);
-                if (mode === 'sale') {
+
+                if (currentScanMode === 'sale') {
                     addToCart(code);
-                    elements.saleStatus.textContent = `Scanned: ${code}`;
+                    const itemInCart = cart.find(c => String(c.barcode) === String(code));
+                    const qty = itemInCart ? itemInCart.qty : 1;
+                    elements.saleStatus.textContent = `Added: ${code} (${qty}x)`;
+                    // Auto-stop after first successful detection (with tiny delay for feedback)
+                    setTimeout(stopScanner, 400);
                 } else {
                     document.getElementById('stock-barcode').value = code;
                     elements.stockStatus.textContent = `Barcode captured: ${code}`;
+                    stopScanner();
                 }
-                stopScanner();
             });
         } catch (e) {
             alert("Camera access denied or unavailable.\nCheck permissions.");
@@ -431,13 +447,11 @@
             const payload = JSON.stringify({ name, barcode, cost, category });
             const res = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids OPTIONS preflight
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: payload
             });
-            // GAS often returns 200 even on success with no-cors-like behavior
             alert("Item saved successfully!");
-            fetchInventory(); // refresh list
-            // clear form
+            fetchInventory();
             document.getElementById('stock-name').value = '';
             document.getElementById('stock-barcode').value = '';
             document.getElementById('stock-cost').value = '';
