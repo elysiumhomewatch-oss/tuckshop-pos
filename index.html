@@ -4,24 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tuckshop POS</title>
-    <!-- Favicon fix -->
+    <!-- Favicon fix to stop 404 console error -->
     <link rel="icon" href="data:,">
-    <!-- Correct Barcode Library -->
+    <!-- Corrected Library Links -->
     <script src="https://unpkg.com"></script>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; margin: 0; }
+        body { font-family: sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
         .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         nav { display: flex; gap: 5px; margin-bottom: 20px; }
         nav button { flex: 1; padding: 12px; cursor: pointer; border: none; background: #007bff; color: white; border-radius: 4px; font-weight: bold; }
         .tab-content { display: none; }
         .active { display: block; }
-        input, select { width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        input, select { width: 100%; padding: 12px; margin-top: 5px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
         #reader-container { width: 100%; max-width: 400px; margin: 0 auto 20px auto; display: none; }
         #reader { width: 100%; border: 2px solid #007bff; border-radius: 8px; overflow: hidden; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { text-align: left; padding: 10px; border-bottom: 1px solid #ddd; }
         .markup-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
-        .btn-success { background: #28a745; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; cursor: pointer; font-size: 1rem; }
+        .btn-success { background: #28a745; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; cursor: pointer; font-size: 1rem; font-weight: bold; }
         .btn-scan { background: #6f42c1; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
     </style>
 </head>
@@ -37,7 +37,7 @@
     <!-- Shared Scanner Viewport -->
     <div id="reader-container">
         <div id="reader"></div>
-        <button onclick="toggleScanner()" style="width:100%; background:#dc3545; color:white; padding:10px; border:none; margin-top:5px; border-radius: 4px;">Close Camera</button>
+        <button onclick="toggleScanner()" style="width:100%; background:#dc3545; color:white; padding:10px; border:none; margin-top:5px; border-radius: 4px; cursor:pointer;">Close Camera</button>
     </div>
 
     <!-- Cashpoint Tab -->
@@ -53,7 +53,7 @@
                 <tbody id="cart-items"></tbody>
             </table>
             <h3 style="text-align:right;">Total: R<span id="total-price">0.00</span></h3>
-            <button class="btn-success" onclick="checkout()">Finish Sale & Clear</button>
+            <button class="btn-success" onclick="checkout()">Finish Sale & Clear Cart</button>
         </div>
     </div>
 
@@ -63,7 +63,7 @@
         <button class="btn-scan" onclick="toggleScanner('stock')">📷 Scan Barcode for Stock</button>
         <input type="text" id="itemName" placeholder="Item Name">
         <input type="number" id="itemCost" placeholder="Cost Price (Wholesale)">
-        <input type="text" id="itemBarcode" placeholder="Barcode ID">
+        <input type="text" id="itemBarcode" placeholder="Barcode ID (Auto-fills on scan)">
         <select id="itemCategory">
             <option value="Snacks">Snacks</option>
             <option value="Drinks">Drinks</option>
@@ -78,7 +78,7 @@
         <label>Google Apps Script URL:</label>
         <input type="text" id="scriptUrl" placeholder="https://script.google.com...">
         
-        <h3>Markups (%)</h3>
+        <h3>Category Markups (%)</h3>
         <div class="markup-row"><label>Snacks:</label><input type="number" id="markup_Snacks" value="20"></div>
         <div class="markup-row"><label>Drinks:</label><input type="number" id="markup_Drinks" value="15"></div>
         <div class="markup-row"><label>Other:</label><input type="number" id="markup_Other" value="10"></div>
@@ -87,18 +87,23 @@
 </div>
 
 <script>
+    // Critical: Initialize global state variables
     let inventory = [];
     let cart = JSON.parse(localStorage.getItem('tuckshop_cart')) || [];
     let scanner = null;
     let isScanning = false;
     let currentMode = 'sale';
 
-    // Load initial settings
-    document.getElementById('scriptUrl').value = localStorage.getItem('google_script_url') || '';
-    ['Snacks', 'Drinks', 'Other'].forEach(cat => {
-        const saved = localStorage.getItem('markup_' + cat);
-        if (saved) document.getElementById('markup_' + cat).value = saved;
-    });
+    // Load initial settings from storage
+    window.onload = () => {
+        document.getElementById('scriptUrl').value = localStorage.getItem('google_script_url') || '';
+        ['Snacks', 'Drinks', 'Other'].forEach(cat => {
+            const saved = localStorage.getItem('markup_' + cat);
+            if (saved) document.getElementById('markup_' + cat).value = saved;
+        });
+        updateUI();
+        loadFromSheet();
+    };
 
     function showTab(id) {
         if (isScanning) toggleScanner();
@@ -108,34 +113,51 @@
 
     async function toggleScanner(mode) {
         const container = document.getElementById('reader-container');
+        
         if (isScanning) {
-            await scanner.stop();
+            if (scanner) {
+                await scanner.stop();
+                isScanning = false;
+            }
             container.style.display = 'none';
-            isScanning = false;
         } else {
-            currentMode = mode || currentMode;
+            currentMode = mode || 'sale';
             container.style.display = 'block';
+            
+            // Check if Library exists before calling
+            if (typeof Html5Qrcode === "undefined") {
+                alert("Scanner library failed to load. Check your internet connection.");
+                return;
+            }
+
             if (!scanner) scanner = new Html5Qrcode("reader");
             
-            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
-                (barcode) => {
-                    if (currentMode === 'sale') {
-                        addToCart(barcode);
-                        if (navigator.vibrate) navigator.vibrate(50);
-                    } else {
-                        document.getElementById('itemBarcode').value = barcode;
-                        toggleScanner(); // Stop after one scan for stock
-                        if (navigator.vibrate) navigator.vibrate(100);
+            try {
+                await scanner.start(
+                    { facingMode: "environment" }, 
+                    { fps: 10, qrbox: 250 }, 
+                    (barcode) => {
+                        if (currentMode === 'sale') {
+                            addToCart(barcode);
+                            if (navigator.vibrate) navigator.vibrate(50);
+                        } else {
+                            document.getElementById('itemBarcode').value = barcode;
+                            toggleScanner(); // Auto-stop after stock scan
+                            if (navigator.vibrate) navigator.vibrate(100);
+                        }
                     }
-                }
-            ).catch(err => alert("Camera error: " + err));
-            isScanning = true;
+                );
+                isScanning = true;
+            } catch (err) {
+                alert("Camera error: " + err);
+                container.style.display = 'none';
+            }
         }
     }
 
     function addToCart(barcode) {
         const item = inventory.find(i => i.barcode == barcode);
-        if (!item) return alert("Item not in inventory!");
+        if (!item) return alert("Item [" + barcode + "] not found in inventory!");
 
         const markup = parseFloat(localStorage.getItem('markup_' + item.category) || 0) / 100;
         const sellPrice = parseFloat(item.cost) * (1 + markup);
@@ -158,7 +180,7 @@
                 <td>${item.qty}</td>
                 <td>R${item.price.toFixed(2)}</td>
                 <td>R${(item.price * item.qty).toFixed(2)}</td>
-                <td><button onclick="removeItem(${i})" style="color:red; border:none; background:none; cursor:pointer;">✖</button></td>
+                <td><button onclick="removeItem(${i})" style="color:red; border:none; background:none; cursor:pointer; font-weight:bold;">✖</button></td>
             </tr>
         `).join('');
 
@@ -172,8 +194,9 @@
     }
 
     function checkout() {
-        if (cart.length === 0) return;
-        alert("Sale Complete. Total: R" + document.getElementById('total-price').innerText);
+        if (cart.length === 0) return alert("Cart is empty");
+        const total = document.getElementById('total-price').innerText;
+        alert("Transaction complete! Total: R" + total);
         cart = [];
         updateUI();
     }
@@ -184,23 +207,33 @@
         try {
             const response = await fetch(url);
             inventory = await response.json();
-        } catch (e) { console.error("Fetch error:", e); }
+        } catch (e) { 
+            console.error("Inventory fetch failed:", e); 
+        }
     }
 
     async function syncToSheet() {
         const url = localStorage.getItem('google_script_url');
-        if (!url) return alert("Set Script URL in Settings!");
+        if (!url) return alert("Please set your Google Script URL in Settings first!");
         
-        const item = {
+        const itemData = {
             name: document.getElementById('itemName').value,
             cost: document.getElementById('itemCost').value,
             barcode: document.getElementById('itemBarcode').value,
             category: document.getElementById('itemCategory').value
         };
 
-        await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(item) });
-        alert("Saved to Cloud!");
-        loadFromSheet();
+        if (!itemData.name || !itemData.cost || !itemData.barcode) {
+            return alert("Please fill in all stock details!");
+        }
+
+        try {
+            await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(itemData) });
+            alert("Saved to Google Sheets!");
+            loadFromSheet(); // Refresh local list
+        } catch (e) { 
+            alert("Error saving: " + e); 
+        }
     }
 
     function saveSettings() {
@@ -211,10 +244,6 @@
         alert("Settings Saved!");
         loadFromSheet();
     }
-
-    // Startup
-    updateUI();
-    loadFromSheet();
 </script>
 </body>
 </html>
