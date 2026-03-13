@@ -1,44 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-ZA">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tuckshop POS Pro</title>
     <link rel="icon" href="data:,">
-    <!-- Quagga2 Barcode Library -->
+    <!-- Primary Quagga2 CDN -->
     <script src="https://cdn.jsdelivr.net"></script>
     <style>
         :root { --primary: #2563eb; --success: #16a34a; --danger: #dc2626; --bg: #f8fafc; --text: #1e293b; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; }
         .container { max-width: 500px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        
-        /* Navigation */
         nav { display: flex; gap: 8px; margin-bottom: 15px; }
         nav button { flex: 1; padding: 12px; border: none; background: #e2e8f0; border-radius: 8px; font-weight: 600; cursor: pointer; }
         nav button.active { background: var(--primary); color: white; }
-
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-
-        /* Scanner */
         #interactive.viewport { width: 100%; height: 250px; position: relative; overflow: hidden; border-radius: 8px; background: #000; margin-bottom: 10px; display: none; }
         #interactive.viewport > video, #interactive.viewport > canvas { width: 100%; height: 100%; object-fit: cover; }
-
-        /* UI Elements */
         input, select { width: 100%; padding: 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; margin-bottom: 10px; box-sizing: border-box; }
         .btn { width: 100%; padding: 14px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; margin-bottom: 10px; font-size: 16px; display: block; text-align: center; }
         .btn-scan { background: var(--primary); color: white; }
         .btn-save { background: var(--success); color: white; }
         .btn-danger { background: var(--danger); color: white; }
-
-        /* Cart & Search */
         .cart-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
         #search-results { position: absolute; background: white; width: 90%; z-index: 100; border: 1px solid #ddd; border-radius: 8px; max-height: 200px; overflow-y: auto; display: none; }
         .search-row { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
-        
         .markup-group { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .markup-group label { flex: 1; }
-        .markup-group input { flex: 1; margin-bottom: 0; }
     </style>
 </head>
 <body>
@@ -47,33 +35,28 @@
     <nav>
         <button id="nav-sale" class="active" onclick="showTab('sale')">Sale</button>
         <button id="nav-stock" onclick="showTab('stock')">Stock</button>
-        <button id="nav-sets" onclick="showTab('sets')">⚙️</button>
+        <button id="nav-sets" onclick="showTab('sets')">⚙️ Settings</button>
     </nav>
 
-    <!-- Scanner View -->
     <div id="interactive" class="viewport"></div>
     <button id="stop-scan-btn" class="btn btn-danger" style="display:none;" onclick="stopScanner()">Close Camera</button>
 
-    <!-- SALE TAB -->
     <div id="sale-tab" class="tab-content active">
         <button class="btn btn-scan" onclick="startScanner('sale')">📷 Scan Item</button>
         <div style="position: relative;">
             <input type="text" id="manual-search" placeholder="🔍 Search Name or Barcode..." oninput="handleSearch(this.value)">
             <div id="search-results"></div>
         </div>
-
         <div id="cart">
             <div id="cart-items-list"></div>
             <div style="display:flex; justify-content:space-between; font-size: 22px; font-weight: 800; padding: 20px 0;">
-                <span>Total</span>
-                <span id="grand-total">R0.00</span>
+                <span>Total</span><span id="grand-total">R0.00</span>
             </div>
             <button class="btn btn-save" onclick="checkout()">Complete Sale</button>
             <button class="btn btn-danger" onclick="clearCart()">Clear All</button>
         </div>
     </div>
 
-    <!-- STOCK TAB -->
     <div id="stock-tab" class="tab-content">
         <h2>Receive Goods</h2>
         <button class="btn btn-scan" onclick="startScanner('stock')">📷 Scan Barcode</button>
@@ -88,31 +71,32 @@
         <button class="btn btn-save" onclick="saveStockToCloud()">Save to Cloud</button>
     </div>
 
-    <!-- SETTINGS TAB -->
     <div id="sets-tab" class="tab-content">
         <h2>Configuration</h2>
         <label>Google Apps Script URL:</label>
         <input type="text" id="sheet-url" placeholder="https://script.google.com...">
-        
         <h3>Category Markups (%)</h3>
         <div class="markup-group"><label>Snacks:</label><input type="number" id="markup-Snacks" value="20"></div>
         <div class="markup-group"><label>Drinks:</label><input type="number" id="markup-Drinks" value="15"></div>
         <div class="markup-group"><label>Other:</label><input type="number" id="markup-Other" value="10"></div>
-        
         <button class="btn" style="background:#333; color:white" onclick="saveSettings()">Save & Sync</button>
     </div>
 </div>
 
 <script>
-    let inventory = [];
-    let cart = [];
-    let isScannerRunning = false;
+    let inventory = [], cart = [], isScannerRunning = false;
 
-    // --- Startup ---
+    // --- Startup & Library Recovery ---
     window.onload = () => {
         loadSettings();
         fetchInventory();
         renderCart();
+        // Fallback if primary CDN fails
+        if (typeof Quagga === 'undefined') {
+            let script = document.createElement('script');
+            script.src = "https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js";
+            document.head.appendChild(script);
+        }
     };
 
     function showTab(tab) {
@@ -123,18 +107,22 @@
         document.getElementById('nav-' + tab).classList.add('active');
     }
 
-    // --- Scanner Logic ---
     async function startScanner(mode) {
-        if (typeof Quagga === 'undefined') return alert("Library loading...");
+        // Wait for library to be ready
+        if (typeof Quagga === 'undefined') {
+            alert("Scanner library is still loading from the internet. Please try again in 3 seconds.");
+            return;
+        }
         
         try {
             await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            document.getElementById('interactive').style.display = 'block';
+            const view = document.getElementById('interactive');
+            view.style.display = 'block';
             document.getElementById('stop-scan-btn').style.display = 'block';
             isScannerRunning = true;
 
             Quagga.init({
-                inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#interactive'), constraints: { facingMode: "environment" } },
+                inputStream: { name: "Live", type: "LiveStream", target: view, constraints: { facingMode: "environment" } },
                 decoder: { readers: ["ean_reader", "code_128_reader", "upc_reader", "code_39_reader"] }
             }, (err) => {
                 if (err) return alert("Scanner Error: " + err);
@@ -145,25 +133,22 @@
                 const code = data.codeResult.code;
                 if (mode === 'sale') addToCart(code);
                 else document.getElementById('stock-barcode').value = code;
-                
                 if (navigator.vibrate) navigator.vibrate(100);
                 stopScanner();
             });
-        } catch (e) { alert("Camera Permission Required"); }
+        } catch (e) { alert("Camera Permission Denied or Not Supported."); }
     }
 
     function stopScanner() {
-        Quagga.stop();
+        if (typeof Quagga !== 'undefined') Quagga.stop();
         document.getElementById('interactive').style.display = 'none';
         document.getElementById('stop-scan-btn').style.display = 'none';
         isScannerRunning = false;
     }
 
-    // --- POS & Logic ---
     function handleSearch(val) {
         const resDiv = document.getElementById('search-results');
         if (val.length < 2) { resDiv.style.display = 'none'; return; }
-        
         const filtered = inventory.filter(i => i.name.toLowerCase().includes(val.toLowerCase()) || i.barcode.includes(val));
         resDiv.innerHTML = filtered.map(i => `<div class="search-row" onclick="addToCart('${i.barcode}')">${i.name} (R${getPrice(i)})</div>`).join('');
         resDiv.style.display = filtered.length ? 'block' : 'none';
@@ -171,17 +156,15 @@
 
     function getPrice(item) {
         const markup = parseFloat(localStorage.getItem('markup-' + item.category) || 20) / 100;
-        return (item.cost * (1 + markup)).toFixed(2);
+        return (parseFloat(item.cost) * (1 + markup)).toFixed(2);
     }
 
     function addToCart(barcode) {
         const item = inventory.find(i => i.barcode == barcode);
-        if (!item) return alert("Barcode not in system!");
-        
+        if (!item) return alert("Item not found in stock!");
         const existing = cart.find(c => c.barcode == barcode);
         if (existing) existing.qty++;
         else cart.push({ ...item, qty: 1, price: getPrice(item) });
-        
         document.getElementById('search-results').style.display = 'none';
         document.getElementById('manual-search').value = '';
         renderCart();
@@ -189,65 +172,36 @@
 
     function renderCart() {
         const list = document.getElementById('cart-items-list');
-        list.innerHTML = cart.map((i, index) => `
-            <div class="cart-item">
-                <span><b>${i.name}</b> x${i.qty}</span>
-                <span>R${(i.price * i.qty).toFixed(2)}</span>
-            </div>
-        `).join('');
-        
+        list.innerHTML = cart.map(i => `<div class="cart-item"><span><b>${i.name}</b> x${i.qty}</span><span>R${(i.price * i.qty).toFixed(2)}</span></div>`).join('');
         const total = cart.reduce((sum, i) => sum + (i.price * i.qty), 0);
         document.getElementById('grand-total').innerText = 'R' + total.toFixed(2);
     }
 
     function clearCart() { cart = []; renderCart(); }
-
-    function checkout() {
-        if (!cart.length) return;
-        alert("Success! Total: " + document.getElementById('grand-total').innerText);
-        clearCart();
-    }
-
-    // --- Settings & Cloud ---
+    function checkout() { if (!cart.length) return; alert("Success! Total: " + document.getElementById('grand-total').innerText); clearCart(); }
     function saveSettings() {
         localStorage.setItem('sheet-url', document.getElementById('sheet-url').value);
-        ['Snacks', 'Drinks', 'Other'].forEach(cat => {
-            localStorage.setItem('markup-' + cat, document.getElementById('markup-' + cat).value);
-        });
-        alert("Settings Saved!");
-        fetchInventory();
+        ['Snacks', 'Drinks', 'Other'].forEach(cat => localStorage.setItem('markup-' + cat, document.getElementById('markup-' + cat).value));
+        alert("Settings Saved!"); fetchInventory();
     }
-
     function loadSettings() {
         document.getElementById('sheet-url').value = localStorage.getItem('sheet-url') || '';
-        ['Snacks', 'Drinks', 'Other'].forEach(cat => {
-            document.getElementById('markup-' + cat).value = localStorage.getItem('markup-' + cat) || 20;
-        });
+        ['Snacks', 'Drinks', 'Other'].forEach(cat => document.getElementById('markup-' + cat).value = localStorage.getItem('markup-' + cat) || 20);
     }
-
     async function fetchInventory() {
         const url = localStorage.getItem('sheet-url');
         if (!url) return;
         try {
             const res = await fetch(url);
             inventory = await res.json();
-            console.log("Inventory Loaded:", inventory);
-        } catch (e) { console.error("Sync Failed"); }
+        } catch (e) { console.error("Cloud Sync Failed"); }
     }
-
     async function saveStockToCloud() {
         const url = localStorage.getItem('sheet-url');
-        const data = {
-            name: document.getElementById('stock-name').value,
-            cost: document.getElementById('stock-cost').value,
-            barcode: document.getElementById('stock-barcode').value,
-            category: document.getElementById('stock-cat').value
-        };
+        const data = { name: document.getElementById('stock-name').value, cost: document.getElementById('stock-cost').value, barcode: document.getElementById('stock-barcode').value, category: document.getElementById('stock-cat').value };
         if (!url) return alert("Set URL in Settings!");
-        
         await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
-        alert("Stock Recorded!");
-        fetchInventory();
+        alert("Stock Recorded!"); fetchInventory();
     }
 </script>
 </body>
