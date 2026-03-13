@@ -27,13 +27,18 @@
         <button onclick="showTab('settings')">Settings</button>
     </nav>
 
-    <!-- Cashpoint -->
+     <!-- Cashpoint Tab -->
     <div id="cashpoint" class="tab-content active">
-    <h2>Cashpoint</h2>
-    <div id="reader"></div>
-    <div style="margin-top:10px; display:flex; gap:5px;">
-        <input type="text" id="manualBarcode" placeholder="Enter Barcode manually">
-        <button onclick="addToCart(document.getElementById('manualBarcode').value)" style="padding:10px; background:#007bff; color:white; border:none; border-radius:4px;">Add</button>
+        <h2>Cashpoint</h2>
+        <button id="start-scan-sale" onclick="toggleScanner('sale')" style="width:100%; background:#007bff; color:white; padding:15px; border:none; margin-bottom:10px; font-weight:bold;">📷 Start Scanning Items</button>
+        <div id="cart">
+            <table id="cart-table" style="width:100%">
+                <thead><tr><th>Item</th><th>Qty</th><th>Subtotal</th></tr></thead>
+                <tbody id="cart-items"></tbody>
+            </table>
+            <h3>Total: R<span id="total-price">0.00</span></h3>
+            <button onclick="checkout()" style="width:100%; background:green; color:white; padding:15px; border:none;">Finish Sale</button>
+        </div>
     </div>
     
     <div id="cart">
@@ -49,18 +54,19 @@
     </div>
 </div>
 
-    <!-- Stock -->
+    <!-- Stock Tab -->
     <div id="stock" class="tab-content">
-        <h2>Add Stock (Wholesale)</h2>
+        <h2>Stock Receiving</h2>
+        <button id="start-scan-stock" onclick="toggleScanner('stock')" style="width:100%; background:#007bff; color:white; padding:15px; border:none; margin-bottom:10px; font-weight:bold;">📷 Scan Barcode to Add</button>
         <input type="text" id="itemName" placeholder="Item Name">
-        <input type="number" id="itemCost" placeholder="Cost Price (Wholesale)">
-        <input type="text" id="itemBarcode" placeholder="Scan/Type Barcode">
+        <input type="number" id="itemCost" placeholder="Cost Price">
+        <input type="text" id="itemBarcode" placeholder="Scanned Barcode ID">
         <select id="itemCategory">
             <option value="Snacks">Snacks</option>
             <option value="Drinks">Drinks</option>
             <option value="Other">Other</option>
         </select>
-        <button onclick="syncToSheet()" style="background:#28a745; color:white; padding:10px; width:100%; border:none;">Add to Sheet</button>
+        <button onclick="syncToSheet()" style="background:#28a745; color:white; padding:10px; width:100%; border:none;">Save to Sheet</button>
     </div>
 
     <!-- Settings -->
@@ -90,8 +96,41 @@
 
     let inventory = [];
     let cart = JSON.parse(localStorage.getItem('tuckshop_cart')) || []; // Persistent cart
-    let scanner = null;
+    let scanner = null;        
 
+async function toggleScanner(mode) {
+        const container = document.getElementById('reader-container');
+        if (isScanning) {
+            await scanner.stop();
+            container.style.display = 'none';
+            isScanning = false;
+        } else {
+            currentMode = mode || currentMode;
+            container.style.display = 'block';
+            if (!scanner) scanner = new Html5Qrcode("reader");
+            
+            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
+                (barcode) => {
+                    if (currentMode === 'sale') {
+                        addToCart(barcode);
+                    } else {
+                        document.getElementById('itemBarcode').value = barcode;
+                        // Vibrate or beep to confirm capture
+                        if (navigator.vibrate) navigator.vibrate(100);
+                    }
+                }
+            );
+            isScanning = true;
+        }
+    }
+
+    // Auto-stop scanner when switching tabs to save battery
+    function showTab(id) {
+        if (isScanning) toggleScanner(); 
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+    
     // Load saved settings
     document.getElementById('scriptUrl').value = localStorage.getItem('google_script_url') || '';
     ['Snacks', 'Drinks', 'Other'].forEach(cat => {
