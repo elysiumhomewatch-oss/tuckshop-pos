@@ -5,28 +5,146 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tuckshop POS Pro</title>
     <link rel="icon" href="data:,">
-    <script src="https://cdn.jsdelivr.net"></script>
+    <!-- Use maintained Quagga2 fork – latest as of 2026 works better than original Quagga -->
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
     <style>
-        :root { --primary: #2563eb; --success: #16a34a; --danger: #dc2626; --bg: #f8fafc; --text: #1e293b; }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        nav { display: flex; gap: 8px; margin-bottom: 15px; }
-        nav button { flex: 1; padding: 12px; border: none; background: #e2e8f0; border-radius: 8px; font-weight: 600; cursor: pointer; }
-        nav button.active { background: var(--primary); color: white; }
+        :root {
+            --primary: #2563eb;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --bg: #f8fafc;
+            --text: #1e293b;
+            --gray: #64748b;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 12px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 520px;
+            margin: 0 auto;
+            background: white;
+            padding: 16px;
+            border-radius: 16px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+        }
+        nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        nav button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: #e2e8f0;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        nav button.active {
+            background: var(--primary);
+            color: white;
+        }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        #interactive.viewport { width: 100%; height: 250px; position: relative; overflow: hidden; border-radius: 8px; background: #000; margin-bottom: 10px; display: none; }
-        #interactive.viewport > video, #interactive.viewport > canvas { width: 100%; height: 100%; object-fit: cover; }
-        input, select { width: 100%; padding: 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; margin-bottom: 10px; box-sizing: border-box; }
-        .btn { width: 100%; padding: 14px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; margin-bottom: 10px; font-size: 16px; display: block; text-align: center; }
+        #interactive.viewport {
+            width: 100%;
+            height: 260px;
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            background: #000;
+            margin: 12px 0;
+            display: none;
+        }
+        #interactive.viewport > video, #interactive.viewport > canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        input, select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            margin-bottom: 12px;
+            transition: opacity 0.2s;
+        }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-scan { background: var(--primary); color: white; }
         .btn-save { background: var(--success); color: white; }
         .btn-danger { background: var(--danger); color: white; }
-        .cart-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9; align-items: center;}
-        #search-results { position: absolute; background: white; width: calc(100% - 30px); z-index: 100; border: 1px solid #ddd; border-radius: 8px; max-height: 200px; overflow-y: auto; display: none; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .search-row { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
-        .markup-group { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .del-btn { background: none; border: none; color: var(--danger); font-weight: bold; cursor: pointer; padding: 5px 10px; }
+        .btn-gray { background: var(--gray); color: white; }
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        #search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            max-height: 220px;
+            overflow-y: auto;
+            z-index: 10;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .search-row {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+        }
+        .search-row:hover { background: #f8fafc; }
+        .markup-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .markup-group label { flex: 0 0 90px; font-weight: 500; }
+        .del-btn {
+            background: none;
+            border: none;
+            color: var(--danger);
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+        .total-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 24px;
+            font-weight: 800;
+            padding: 20px 0;
+            border-top: 2px solid #e2e8f0;
+        }
+        .status-msg { color: var(--gray); font-size: 14px; margin: 8px 0; min-height: 1.4em; }
     </style>
 </head>
 <body>
@@ -42,49 +160,69 @@
     <button id="stop-scan-btn" class="btn btn-danger" style="display:none;" onclick="stopScanner()">Close Camera</button>
 
     <div id="sale-tab" class="tab-content active">
-        <button class="btn btn-scan" onclick="startScanner('sale')">📷 Scan Item</button>
+        <button id="scan-sale-btn" class="btn btn-scan" onclick="startScanner('sale')">📷 Scan Item</button>
         <div style="position: relative;">
-            <input type="text" id="manual-search" placeholder="🔍 Search Name or Barcode..." oninput="handleSearch(this.value)">
+            <input type="text" id="manual-search" placeholder="🔍 Search name or barcode..." oninput="handleSearch(this.value)">
             <div id="search-results"></div>
         </div>
         <div id="cart">
             <div id="cart-items-list"></div>
-            <div style="display:flex; justify-content:space-between; font-size: 22px; font-weight: 800; padding: 20px 0;">
-                <span>Total</span><span id="grand-total">R0.00</span>
+            <div class="total-display">
+                <span>Total</span>
+                <span id="grand-total">R0.00</span>
             </div>
-            <button class="btn btn-save" onclick="checkout()">Complete Sale</button>
-            <button class="btn btn-danger" style="background:#94a3b8" onclick="clearCart()">Clear All</button>
+            <button id="checkout-btn" class="btn btn-save" onclick="checkout()">Complete Sale</button>
+            <button class="btn btn-gray" onclick="clearCart()">Clear Cart</button>
         </div>
+        <div id="sale-status" class="status-msg"></div>
     </div>
 
     <div id="stock-tab" class="tab-content">
-        <h2>Receive Goods</h2>
-        <button class="btn btn-scan" onclick="startScanner('stock')">📷 Scan Barcode</button>
-        <input type="text" id="stock-barcode" placeholder="Barcode ID">
+        <h2>Receive New Stock</h2>
+        <button id="scan-stock-btn" class="btn btn-scan" onclick="startScanner('stock')">📷 Scan Barcode</button>
+        <input type="text" id="stock-barcode" placeholder="Barcode">
         <input type="text" id="stock-name" placeholder="Item Name">
-        <input type="number" id="stock-cost" placeholder="Cost Price (Wholesale)">
+        <input type="number" step="0.01" id="stock-cost" placeholder="Cost Price (R)">
         <select id="stock-cat">
             <option value="Snacks">Snacks</option>
             <option value="Drinks">Drinks</option>
             <option value="Other">Other</option>
         </select>
-        <button class="btn btn-save" onclick="saveStockToCloud()">Save to Cloud</button>
+        <button id="save-stock-btn" class="btn btn-save" onclick="saveStockToCloud()">Save Item</button>
+        <div id="stock-status" class="status-msg"></div>
     </div>
 
     <div id="sets-tab" class="tab-content">
-        <h2>Configuration</h2>
-        <label>Google Apps Script URL:</label>
-        <input type="text" id="sheet-url" placeholder="https://script.google.com...">
-        <h3>Category Markups (%)</h3>
-        <div class="markup-group"><label>Snacks:</label><input type="number" id="markup-Snacks" value="20"></div>
-        <div class="markup-group"><label>Drinks:</label><input type="number" id="markup-Drinks" value="15"></div>
-        <div class="markup-group"><label>Other:</label><input type="number" id="markup-Other" value="10"></div>
-        <button class="btn" style="background:#333; color:white" onclick="saveSettings()">Save & Sync</button>
+        <h2>Settings</h2>
+        <label>Google Apps Script Web App URL:</label>
+        <input type="text" id="sheet-url" placeholder="https://script.google.com/macros/s/.../exec">
+        
+        <h3>Category Selling Markup (%)</h3>
+        <div class="markup-group"><label>Snacks:</label><input type="number" id="markup-Snacks" value="20" min="0"></div>
+        <div class="markup-group"><label>Drinks:</label><input type="number" id="markup-Drinks" value="15" min="0"></div>
+        <div class="markup-group"><label>Other:</label><input type="number" id="markup-Other" value="10" min="0"></div>
+        
+        <button class="btn" style="background:#334155; color:white" onclick="saveSettings()">Save Settings</button>
     </div>
 </div>
 
 <script>
-    let inventory = [], cart = [], isScannerRunning = false;
+    let inventory = [];
+    let cart = [];
+    let isScannerRunning = false;
+    let currentScanMode = null;
+
+    const elements = {
+        manualSearch: document.getElementById('manual-search'),
+        searchResults: document.getElementById('search-results'),
+        cartList: document.getElementById('cart-items-list'),
+        grandTotal: document.getElementById('grand-total'),
+        scanSaleBtn: document.getElementById('scan-sale-btn'),
+        checkoutBtn: document.getElementById('checkout-btn'),
+        saveStockBtn: document.getElementById('save-stock-btn'),
+        saleStatus: document.getElementById('sale-status'),
+        stockStatus: document.getElementById('stock-status')
+    };
 
     window.onload = () => {
         loadSettings();
@@ -96,106 +234,165 @@
         if (isScannerRunning) stopScanner();
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-        document.getElementById(tab + '-tab').classList.add('active');
-        document.getElementById('nav-' + tab).classList.add('active');
+        document.getElementById(`${tab}-tab`).classList.add('active');
+        document.getElementById(`nav-${tab}`).classList.add('active');
     }
 
     async function startScanner(mode) {
-        if (typeof Quagga === 'undefined') return alert("Scanner loading...");
+        if (typeof Quagga === 'undefined') {
+            alert("Scanner library failed to load. Check internet.");
+            return;
+        }
+        currentScanMode = mode;
         try {
             await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            const view = document.getElementById('interactive');
-            view.style.display = 'block';
+            const viewport = document.getElementById('interactive');
+            viewport.style.display = 'block';
             document.getElementById('stop-scan-btn').style.display = 'block';
             isScannerRunning = true;
 
             Quagga.init({
-                inputStream: { 
-                    name: "Live", 
-                    type: "LiveStream", 
-                    target: view, 
-                    constraints: { facingMode: "environment" },
-                    willReadFrequently: true // Fix for Canvas2D warning
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: viewport,
+                    constraints: {
+                        facingMode: "environment",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
                 },
-                decoder: { readers: ["ean_reader", "code_128_reader", "upc_reader", "code_39_reader"] }
-            }, (err) => {
-                if (err) return alert("Scanner Error: " + err);
+                locator: { patchSize: "medium", halfSample: true },
+                numOfWorkers: navigator.hardwareConcurrency ? Math.min(4, navigator.hardwareConcurrency) : 2,
+                decoder: { readers: ["ean_reader", "code_128_reader", "upc_reader", "code_39_reader"] },
+                locate: true
+            }, err => {
+                if (err) {
+                    alert("Scanner init failed: " + err);
+                    stopScanner();
+                    return;
+                }
                 Quagga.start();
             });
 
-            Quagga.onDetected((data) => {
+            Quagga.onDetected(data => {
                 const code = data.codeResult.code;
-                if (mode === 'sale') addToCart(code);
-                else document.getElementById('stock-barcode').value = code;
-                if (navigator.vibrate) navigator.vibrate(100);
+                if (navigator.vibrate) navigator.vibrate(80);
+                if (mode === 'sale') {
+                    addToCart(code);
+                    elements.saleStatus.textContent = `Scanned: ${code}`;
+                } else {
+                    document.getElementById('stock-barcode').value = code;
+                    elements.stockStatus.textContent = `Barcode captured: ${code}`;
+                }
                 stopScanner();
             });
-        } catch (e) { alert("Camera Error: Check Permissions"); }
+        } catch (e) {
+            alert("Camera access denied or unavailable.\nCheck permissions.");
+            stopScanner();
+        }
     }
 
     function stopScanner() {
-        if (typeof Quagga !== 'undefined') Quagga.stop();
+        if (Quagga && isScannerRunning) Quagga.stop();
         document.getElementById('interactive').style.display = 'none';
         document.getElementById('stop-scan-btn').style.display = 'none';
         isScannerRunning = false;
+        currentScanMode = null;
     }
 
     function handleSearch(val) {
-        const resDiv = document.getElementById('search-results');
-        if (val.length < 2) { resDiv.style.display = 'none'; return; }
-        
-        // FIX: Ensure barcode is treated as a string before using .includes()
-        const filtered = inventory.filter(i => {
-            const nameMatch = i.name && i.name.toLowerCase().includes(val.toLowerCase());
-            const barcodeMatch = i.barcode && String(i.barcode).includes(val);
-            return nameMatch || barcodeMatch;
-        });
-
-        resDiv.innerHTML = filtered.map(i => `<div class="search-row" onclick="addToCart('${i.barcode}')">${i.name} (R${getPrice(i)})</div>`).join('');
-        resDiv.style.display = filtered.length ? 'block' : 'none';
+        if (val.length < 2) {
+            elements.searchResults.style.display = 'none';
+            return;
+        }
+        const lowerVal = val.toLowerCase();
+        const filtered = inventory.filter(i => 
+            (i.name && i.name.toLowerCase().includes(lowerVal)) ||
+            (i.barcode && String(i.barcode).includes(val))
+        );
+        elements.searchResults.innerHTML = filtered.map(i => `
+            <div class="search-row" onclick="addToCart('${String(i.barcode)}')">
+                ${i.name} – R${getPrice(i)}
+            </div>
+        `).join('');
+        elements.searchResults.style.display = filtered.length ? 'block' : 'none';
     }
 
     function getPrice(item) {
-        const markup = parseFloat(localStorage.getItem('markup-' + (item.category || 'Other')) || 20) / 100;
-        return (parseFloat(item.cost || 0) * (1 + markup)).toFixed(2);
+        const cat = item.category || 'Other';
+        const markupPct = parseFloat(localStorage.getItem(`markup-${cat}`)) || 20;
+        const cost = Number(item.cost) || 0;
+        return (cost * (1 + markupPct / 100)).toFixed(2);
     }
 
-    function addToCart(barcode) {
-        const item = inventory.find(i => String(i.barcode) === String(barcode));
-        if (!item) return alert("Item not found!");
-        const existing = cart.find(c => String(c.barcode) === String(barcode));
+    function addToCart(barcodeStr) {
+        const barcode = String(barcodeStr);
+        const item = inventory.find(i => String(i.barcode) === barcode);
+        if (!item) {
+            alert("Item not found in inventory.");
+            return;
+        }
+        const existing = cart.find(c => String(c.barcode) === barcode);
         if (existing) existing.qty++;
         else cart.push({ ...item, qty: 1, price: getPrice(item) });
-        document.getElementById('search-results').style.display = 'none';
-        document.getElementById('manual-search').value = '';
+        
+        elements.manualSearch.value = '';
+        elements.searchResults.style.display = 'none';
         renderCart();
     }
 
     function renderCart() {
-        const list = document.getElementById('cart-items-list');
-        list.innerHTML = cart.map((i, idx) => `
+        elements.cartList.innerHTML = cart.map((item, idx) => `
             <div class="cart-item">
-                <span><b>${i.name}</b> x${i.qty}</span>
-                <span>R${(i.price * i.qty).toFixed(2)} <button class="del-btn" onclick="removeFromCart(${idx})">✕</button></span>
+                <span><b>${item.name}</b> × ${item.qty}</span>
+                <span>R${(Number(item.price) * item.qty).toFixed(2)}
+                    <button class="del-btn" onclick="removeFromCart(${idx})">✕</button>
+                </span>
             </div>
         `).join('');
-        const total = cart.reduce((sum, i) => sum + (i.price * i.qty), 0);
-        document.getElementById('grand-total').innerText = 'R' + total.toFixed(2);
+
+        const total = cart.reduce((sum, i) => sum + (Number(i.price) * i.qty), 0);
+        elements.grandTotal.textContent = `R${total.toFixed(2)}`;
+        elements.checkoutBtn.disabled = cart.length === 0;
     }
 
-    function removeFromCart(idx) { cart.splice(idx, 1); renderCart(); }
-    function clearCart() { cart = []; renderCart(); }
-    function checkout() { if (!cart.length) return; alert("Checkout Complete: " + document.getElementById('grand-total').innerText); clearCart(); }
-    
+    function removeFromCart(idx) {
+        cart.splice(idx, 1);
+        renderCart();
+    }
+
+    function clearCart() {
+        if (confirm("Clear entire cart?")) {
+            cart = [];
+            renderCart();
+        }
+    }
+
+    function checkout() {
+        if (!cart.length) return;
+        const total = elements.grandTotal.textContent;
+        alert(`Sale completed!\nTotal: ${total}\nThank you!`);
+        // Later: send cart to Google Sheet here
+        clearCart();
+    }
+
     function saveSettings() {
-        localStorage.setItem('sheet-url', document.getElementById('sheet-url').value);
-        ['Snacks', 'Drinks', 'Other'].forEach(cat => localStorage.setItem('markup-' + cat, document.getElementById('markup-' + cat).value));
-        alert("Saved!"); fetchInventory();
+        localStorage.setItem('sheet-url', document.getElementById('sheet-url').value.trim());
+        ['Snacks', 'Drinks', 'Other'].forEach(cat => {
+            const val = document.getElementById(`markup-${cat}`).value;
+            localStorage.setItem(`markup-${cat}`, val || '20');
+        });
+        alert("Settings saved!");
+        fetchInventory();
     }
 
     function loadSettings() {
         document.getElementById('sheet-url').value = localStorage.getItem('sheet-url') || '';
-        ['Snacks', 'Drinks', 'Other'].forEach(cat => document.getElementById('markup-' + cat).value = localStorage.getItem('markup-' + cat) || 20);
+        ['Snacks', 'Drinks', 'Other'].forEach(cat => {
+            const val = localStorage.getItem(`markup-${cat}`);
+            document.getElementById(`markup-${cat}`).value = val || (cat === 'Snacks' ? 20 : cat === 'Drinks' ? 15 : 10);
+        });
     }
 
     async function fetchInventory() {
@@ -203,18 +400,54 @@
         if (!url) return;
         try {
             const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            // Sanitize inventory data: ensure barcodes are strings
-            inventory = data.map(i => ({ ...i, barcode: String(i.barcode) }));
-        } catch (e) { console.error("Sync Failed"); }
+            inventory = data.map(i => ({ ...i, barcode: String(i.barcode || '') }));
+            elements.saleStatus.textContent = `Inventory loaded (${inventory.length} items)`;
+        } catch (e) {
+            console.error(e);
+            elements.saleStatus.textContent = "Failed to load inventory";
+        }
     }
 
     async function saveStockToCloud() {
         const url = localStorage.getItem('sheet-url');
-        if (!url) return alert("Set URL in Settings!");
-        const data = { name: document.getElementById('stock-name').value, cost: document.getElementById('stock-cost').value, barcode: document.getElementById('stock-barcode').value, category: document.getElementById('stock-cat').value };
-        await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
-        alert("Saved!"); fetchInventory();
+        if (!url) return alert("Please set Google Apps Script URL in Settings first.");
+
+        const name = document.getElementById('stock-name').value.trim();
+        const barcode = document.getElementById('stock-barcode').value.trim();
+        const cost = document.getElementById('stock-cost').value;
+        const category = document.getElementById('stock-cat').value;
+
+        if (!name || !barcode || !cost) {
+            alert("Please fill in name, barcode and cost.");
+            return;
+        }
+
+        elements.saveStockBtn.disabled = true;
+        elements.stockStatus.textContent = "Saving...";
+
+        try {
+            const payload = JSON.stringify({ name, barcode, cost, category });
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids OPTIONS preflight
+                body: payload
+            });
+            // GAS often returns 200 even on success with no-cors-like behavior
+            alert("Item saved successfully!");
+            fetchInventory(); // refresh list
+            // clear form
+            document.getElementById('stock-name').value = '';
+            document.getElementById('stock-barcode').value = '';
+            document.getElementById('stock-cost').value = '';
+        } catch (e) {
+            console.error(e);
+            alert("Save failed – check URL & script permissions.");
+        } finally {
+            elements.saveStockBtn.disabled = false;
+            elements.stockStatus.textContent = "";
+        }
     }
 </script>
 </body>
